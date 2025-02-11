@@ -1,4 +1,4 @@
-# kathai-gen | 🎨 AI Story Generator
+# 🎨 kathai-gen | AI Story Generator
 
 
 Generates a Story from an Image using AI!
