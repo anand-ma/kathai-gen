@@ -1,4 +1,4 @@
-# Command to run in local clear && python3.11 -m pip install -r requirements.txt && streamlit run kathai-gen.py 
+# Command to run in local clear && python3.11 -m pip install -qU -r requirements.txt && streamlit run kathai-gen.py 
 import streamlit as st
 from openai import OpenAI
 import requests
