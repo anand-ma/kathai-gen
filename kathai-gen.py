@@ -4,6 +4,14 @@ import requests
 from PIL import Image
 from io import BytesIO
 from together import Together
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import textwrap
+import os
+
+# Commands to install the required packages and Run:
+# pip install -r requirements.txt 
+# streamlit run kathai-gen.py
 
 # Initialize OpenAI client with Together.ai base URL
 client = OpenAI(
@@ -76,6 +84,43 @@ def generate_story(image_url: str, mood: str, size, language: str):
         return None
 
 
+def create_pdf(image, story_text, topic):
+    # Create a temporary PDF file
+    pdf_path = "temp_story.pdf"
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    width, height = letter
+    
+    # Add title
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(50, height - 50, "AI Generated Story")
+    
+    # Add topic
+    c.setFont("Helvetica", 16)
+    c.drawString(50, height - 80, f"Topic: {topic}")
+    
+    # Add image
+    if image:
+        # Save image temporarily
+        temp_img_path = "temp_image.png"
+        image.save(temp_img_path)
+        c.drawImage(temp_img_path, 50, height - 400, width=400, height=300)
+        os.remove(temp_img_path)
+    
+    # Add story text
+    c.setFont("Helvetica", 12)
+    y_position = height - 450
+    wrapped_text = textwrap.fill(story_text, width=80)
+    for line in wrapped_text.split('\n'):
+        if y_position < 50:  # Start new page if we run out of space
+            c.showPage()
+            y_position = height - 50
+            c.setFont("Helvetica", 12)
+        c.drawString(50, y_position, line)
+        y_position -= 20
+    
+    c.save()
+    return pdf_path
+
 
 # Main app
 st.title("🎨 AI Story Generator")
@@ -88,8 +133,11 @@ mood = st.text_input("Story Mood", value="funny", placeholder="funny, sad, happy
 language = st.text_input("Story Language", value="English", placeholder="English, Tamil, French, etc")
 size = st.selectbox("Story Size", ["Short", "Medium", "Long"])
 
+# Create columns for buttons
+col1, col2 = st.columns(2)
+
 # Generate button
-if st.button("Generate", type="primary"):
+if col1.button("Generate", type="primary"):
     if topic:
         with st.spinner("Generating your Image..."):
             # Generate and display image
@@ -99,7 +147,42 @@ if st.button("Generate", type="primary"):
 
         with st.spinner("Creating your story..."):       
             # Generate and display story
-            story = generate_story(image_url, mood, size, language)
-        st.write_stream(story)
+            story_generator = generate_story(image_url, mood, size, language)
+            story_text = ""
+            # Create a placeholder for the story
+            story_placeholder = st.empty()
+            
+            for chunk in story_generator:
+                if chunk:
+                    story_text += chunk
+                    # Update the placeholder with the complete story so far
+                    story_placeholder.markdown(story_text)
+            
+            # Store the generated content in session state
+            st.session_state.generated_image = image
+            st.session_state.generated_story = story_text
+            st.session_state.story_generated = True
     else:
         st.warning("Please enter a topic first!")
+
+# Show export button only after story generation
+if 'story_generated' in st.session_state and st.session_state.story_generated:
+    pdf_path = create_pdf(
+        st.session_state.generated_image,
+        st.session_state.generated_story,
+        topic
+    )
+    
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    
+    col2.download_button(
+        # type="primary",
+        label="Export PDF",
+        data=pdf_bytes,
+        file_name="ai_generated_story.pdf",
+        mime="application/pdf"
+    )
+    
+    # Clean up temporary file
+    os.remove(pdf_path)
